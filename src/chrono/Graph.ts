@@ -3,7 +3,7 @@ import { Graph, MinimalGraph } from "../graph/Graph.js"
 import { Node } from "../graph/Node.js"
 import { cycleInfo, OnCycleAction, WalkForwardContext, WalkStep } from "../graph/Walkable.js"
 import { FieldAtom } from "../replica/Atom.js"
-import { ChronoAtom, ChronoAtomI, ChronoIterator, ChronoValue, MinimalChronoAtom } from "./Atom.js"
+import { ChronoAtom, ChronoAtomI, ChronoIterator, ChronoValue, isChronoAtom, MinimalChronoAtom } from "./Atom.js"
 import {
     CancelPropagationEffect,
     Effect,
@@ -257,7 +257,13 @@ class ChronoGraph extends base {
 
                 maybeDirty.add(atom)
 
-                toCalculate.push(atom)
+                // skip lazy atoms from `toCalculate` array, instead nullify there values
+                // lazy atoms may still be calculated as dependencies of other atoms
+                if (atom.lazy) {
+                    atom.clear()
+                } else {
+                    toCalculate.push(atom)
+                }
             }
         }))
 
@@ -331,6 +337,76 @@ class ChronoGraph extends base {
         }
 
         return { success : true }
+    }
+
+
+    calculateLazyAtom (atom : ChronoAtomI) : ChronoValue {
+        const toCalculate       = [ atom ]
+        const transitions       = new Map<ChronoAtom, { iterator : IterableIterator<ChronoValue>, iterationResult : IteratorResult<ChronoValue> }>()
+
+        const updatedAtoms : ChronoAtom[]     = []
+
+        while (toCalculate.length) {
+            const sourceAtom : ChronoAtom   = toCalculate[ toCalculate.length - 1 ]
+
+            let transition      = transitions.get(sourceAtom)
+
+            if (transition && transition.iterationResult.done) {
+                toCalculate.pop()
+                continue
+            }
+
+            if (!transition) {
+                const iterator      = sourceAtom.calculate(sourceAtom.proposedValue)
+
+                transition          = { iterator : iterator, iterationResult : iterator.next() }
+
+                transitions.set(sourceAtom, transition)
+            }
+
+            let iterationResult : IteratorResult<any> = transition.iterationResult
+
+            do {
+                const value         = iterationResult.value
+
+                if (iterationResult.done) {
+                    sourceAtom.value    = value
+
+                    updatedAtoms.push(sourceAtom)
+
+                    toCalculate.pop()
+
+                    break
+                }
+                else if (isChronoAtom(value)) {
+                    sourceAtom.observedDuringCalculation.push(value)
+
+                    // non-lazy atoms are supposed to be already calculated
+                    if (!value.lazy) {
+                        iterationResult = transition.iterationResult = transition.iterator.next(value.get())
+                    } else {
+                        const requestedTransition   = transitions.get(value)
+
+                        if (!requestedTransition) {
+                            toCalculate.push(value)
+                            break
+                        } else if (requestedTransition.iterationResult.done) {
+                            iterationResult = transition.iterationResult = transition.iterator.next(value.get())
+                        } else {
+                            throw new Error("Cycle during lazy atom calculation")
+                        }
+                    }
+                }
+                else {
+                    throw new Error("Unknown value yielded during lazy atom calculation")
+                }
+
+            } while (true)
+        }
+
+        updatedAtoms.forEach(atom => atom.commitEdges())
+
+        return atom.get()
     }
 
 

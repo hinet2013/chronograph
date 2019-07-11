@@ -23,9 +23,14 @@ export const strictEqualityWithDates = (v1, v2) => {
 
 
 //---------------------------------------------------------------------------------------------------------------------
+const isChronoAtomSymbol = Symbol('isChronoAtom')
+
+//---------------------------------------------------------------------------------------------------------------------
 export const ChronoAtom = <T extends AnyConstructor<HasId & Node>>(base : T) =>
 
 class ChronoAtom extends base {
+    [isChronoAtomSymbol] () {}
+
     proposedArgs        : ChronoValue[]
     proposedValue       : ChronoValue
 
@@ -36,10 +41,12 @@ class ChronoAtom extends base {
 
     equality            : (v1, v2) => boolean       = strictEqualityWithDates
 
+    lazy                : boolean                   = false
+
     calculationContext  : any
     calculation         : ChronoCalculation
 
-    observedDuringCalculation   : ChronoAtom[]     = []
+    observedDuringCalculation   : ChronoAtom[]      = []
 
 
     clearUserInput () {
@@ -107,6 +114,11 @@ class ChronoAtom extends base {
     }
 
 
+    clear () {
+        this.value = undefined
+    }
+
+
     get () : ChronoValue {
         if (this.hasNextStableValue()) {
             return this.getNextStableValue()
@@ -115,7 +127,13 @@ class ChronoAtom extends base {
             return this.getProposedValue()
         }
         else {
-            return this.getConsistentValue()
+            if (this.hasConsistentValue()) return this.getConsistentValue()
+
+            if (this.lazy && this.graph) {
+                return this.graph.calculateLazyAtom(this)
+            } else {
+                return undefined
+            }
         }
     }
 
@@ -166,6 +184,9 @@ class ChronoAtom extends base {
 export type ChronoAtom = Mixin<typeof ChronoAtom>
 export interface ChronoAtomI extends Mixin<typeof ChronoAtom> {}
 
+
+//---------------------------------------------------------------------------------------------------------------------
+export const isChronoAtom = (value : any) : value is ChronoAtom => Boolean(value && value[isChronoAtomSymbol])
 
 //---------------------------------------------------------------------------------------------------------------------
 export class MinimalChronoAtom extends ChronoAtom(HasId(MinimalNode)) {}

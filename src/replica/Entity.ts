@@ -133,6 +133,8 @@ export const Entity = <T extends AnyConstructor<object>>(base : T) => {
 
                 self                : this,
 
+                lazy                : field.lazy,
+
                 calculationContext  : calculationFunction ? this : undefined,
                 calculation         : calculationFunction
             })

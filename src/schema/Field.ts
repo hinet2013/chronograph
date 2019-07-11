@@ -19,6 +19,8 @@ export class Field extends Base {
 
     persistent          : boolean   = true
 
+    lazy                : boolean   = false
+
     createAccessors     : boolean   = true
 
     converter           : ConverterFunc

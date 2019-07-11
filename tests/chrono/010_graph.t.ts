@@ -295,4 +295,36 @@ StartTest(t => {
         t.is(atom3.get(), 3, "Atom updated correctly")
     })
 
+
+    t.it('Lazy calculated atom, values pre-defined', async t => {
+        const graph : ChronoGraph   = MinimalChronoGraph.new()
+
+        const atom1 : ChronoAtom    = graph.addNode(MinimalChronoAtom.new({ value : 0 }))
+        const atom2 : ChronoAtom    = graph.addNode(MinimalChronoAtom.new({ value : 1 }))
+
+        const atom3 : ChronoAtom    = graph.addNode(MinimalChronoAtom.new({
+            lazy : true,
+            calculation     : function * (proposedValue : number) {
+                return (yield atom1) + (yield atom2)
+            }
+        }))
+
+        t.is(graph.isAtomNeedRecalculation(atom3), true, 'Atom considered dirty in graph - has no value')
+
+        t.is(atom3.hasValue(), false, 'Atom has no value')
+
+        await graph.propagate()
+
+        t.is(atom3.hasValue(), false, "Correct result calculated")
+        t.is(atom3.get(), 1, "Correct result calculated")
+
+        atom1.put(1)
+
+        await graph.propagate()
+
+        t.is(atom3.hasValue(), false, "Correct result calculated")
+        t.is(atom3.get(), 2, "Correct result calculated")
+    })
+
+
 })
