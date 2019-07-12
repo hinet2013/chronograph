@@ -261,7 +261,8 @@ class ChronoGraph extends base {
             return GraphCycleDetectedEffect.new({ cycle })
         }
 
-        this.needRecalculationAtoms.forEach(atom => transitions.get(atom).edgesFlow = 1)
+        // set edgesFlow for `needRecalculation` atoms to 1e6 - to always force there calculation
+        this.needRecalculationAtoms.forEach(atom => transitions.get(atom).edgesFlow = 1e6)
 
         let depth
 
