@@ -280,7 +280,7 @@ class ChronoGraph extends base {
             if (transition.iterationResult) {
                 iterationResult     = transition.iterationResult
             } else {
-                if (transition.edgesFlow == 0) {
+                if (transition.edgesFlow == 0 && sourceAtom.proposedArgs === undefined) {
                     transition.edgesFlow--
 
                     sourceAtom.nextStableValue  = sourceAtom.value
