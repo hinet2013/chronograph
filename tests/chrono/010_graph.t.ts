@@ -327,4 +327,74 @@ StartTest(t => {
     })
 
 
+    t.it('Should eliminate unchanged trees', async t => {
+        const graph : ChronoGraph       = MinimalChronoGraph.new()
+
+        const i1        = graph.addNode(MinimalChronoAtom.new({ value : 0 }))
+        const i2        = graph.addNode(MinimalChronoAtom.new({ value : 10 }))
+
+
+        const c1        = graph.addNode(MinimalChronoAtom.new({
+            calculation     : function * (proposedValue : number) {
+                return (yield i1) + (yield i2)
+            }
+        }))
+
+        const c2        = graph.addNode(MinimalChronoAtom.new({
+            calculation     : function * (proposedValue : number) {
+                return (yield i1) + (yield c1)
+            }
+        }))
+
+        const c3        = graph.addNode(MinimalChronoAtom.new({
+            calculation     : function * (proposedValue : number) {
+                return (yield c1)
+            }
+        }))
+
+        const c4        = graph.addNode(MinimalChronoAtom.new({
+            calculation     : function * (proposedValue : number) {
+                return (yield c3)
+            }
+        }))
+
+        const c5        = graph.addNode(MinimalChronoAtom.new({
+            calculation     : function * (proposedValue : number) {
+                return (yield c3)
+            }
+        }))
+
+        const c6        = graph.addNode(MinimalChronoAtom.new({
+            calculation     : function * (proposedValue : number) {
+                return (yield c5) + (yield i2)
+            }
+        }))
+
+        // ----------------
+        const nodes             = [ i1, i2, c1, c2, c3, c4, c5, c6 ]
+
+        const spies             = nodes.map(calculation => t.spyOn(calculation, 'calculate'))
+
+        await graph.propagate()
+
+        t.isDeeply(nodes.map(node => node.get()), [ 0, 10, 10, 10, 10, 10, 10, 20 ], "Correct result calculated")
+
+        spies.forEach(spy => t.expect(spy).toHaveBeenCalled(1))
+
+        // ----------------
+        spies.forEach(spy => spy.reset())
+
+        i1.put(5)
+        i2.put(5)
+
+        await graph.propagate()
+
+        t.isDeeply(nodes.map(node => node.get()), [ 5, 5, 10, 15, 10, 10, 10, 15 ], "Correct result calculated")
+
+        const expectedCalls     = [ 1, 1, 1, 1, 0, 0, 0, 1 ]
+
+        spies.forEach((spy, index) => t.expect(spy).toHaveBeenCalled(expectedCalls[ index ]))
+    })
+
+
 })

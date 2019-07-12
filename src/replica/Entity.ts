@@ -234,9 +234,9 @@ export const Entity = <T extends AnyConstructor<object>>(base : T) => {
         }
 
 
-        markStable (atom : ChronoAtom) {
-            this.getGraph().markStable(atom)
-        }
+        // markStable (atom : ChronoAtom) {
+        //     this.getGraph().markStable(atom)
+        // }
 
 
         static getField (name : Name) : Field {

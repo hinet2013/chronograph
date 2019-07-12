@@ -32,6 +32,9 @@ export enum PropagationResult {
 }
 
 
+export type Transition = { iterator : IterableIterator<ChronoValue>, iterationResult : IteratorResult<ChronoValue>, edgesFlow : number }
+
+
 //---------------------------------------------------------------------------------------------------------------------
 export const ChronoGraph = <T extends AnyConstructor<Graph>>(base : T) =>
 
@@ -41,10 +44,8 @@ class ChronoGraph extends base {
     nodesMap                : Map<ChronoId, ChronoAtomI> = new Map()
 
     needRecalculationAtoms  : Set<ChronoAtomI>       = new Set()
-    stableAtoms             : Set<ChronoAtomI>       = new Set()
 
-    changedAtoms            : ChronoAtomI[]
-    touchedAtoms            : Map<ChronoAtomI, ChronoContinuation>
+    transitions             : Map<ChronoAtomI, Transition>
 
     isPropagating           : boolean               = false
 
@@ -74,26 +75,16 @@ class ChronoGraph extends base {
     }
 
 
-    markStable (atom : ChronoAtomI) {
-        this.stableAtoms.add(atom)
-    }
-
-
-    isAtomStable (atom : ChronoAtomI) : boolean {
-        return this.stableAtoms.has(atom)
-    }
-
-
     commit () {
         this.needRecalculationAtoms.forEach(atom => atom.clearUserInput())
         this.needRecalculationAtoms.clear()
 
-        this.changedAtoms.forEach(atom => atom.commitValue())
-
-        // the edges might have changed, even the atom value itself did not
-        // because of that, we commit the edges for all recalculated atoms (stable atoms)
-        this.stableAtoms.forEach(atom => atom.commitEdges())
-        this.stableAtoms.clear()
+        this.transitions.forEach((transition, atom) => {
+            if (transition.edgesFlow > 0 && transition.iterationResult) {
+                atom.commitValue()
+                atom.commitEdges()
+            }
+        })
     }
 
 
@@ -106,9 +97,9 @@ class ChronoGraph extends base {
 
 
     rejectPartialProgress () {
-        this.touchedAtoms.forEach((_, atom) => atom.reject())
-
-        this.stableAtoms.clear()
+        this.transitions.forEach((transition, atom) => {
+            if (transition.iterationResult) atom.reject()
+        })
     }
 
 
@@ -132,8 +123,6 @@ class ChronoGraph extends base {
 
         this.nodesMap.delete(node.id)
         this.needRecalculationAtoms.delete(node)
-        // we probably don't need this line, since `stableAtoms` are internal state of the propagation process
-        this.stableAtoms.delete(node)
 
         node.onLeaveGraph(this)
 
@@ -141,94 +130,95 @@ class ChronoGraph extends base {
     }
 
 
-    startAtomCalculation (sourceAtom : ChronoAtomI) : ChronoIterationResult {
-        const iterator : ChronoIterator<ChronoValue> = sourceAtom.calculate(sourceAtom.proposedValue)
-
-        let iteratorValue   = iterator.next()
-
-        const value         = iteratorValue.value
-
-        if (value instanceof Effect) {
-            return { effect : value, continuation : { iterator : iterator } }
-        }
-        else if (iteratorValue.done) {
-            return { value }
-        }
-        else {
-            return { continuation : { atom : value, iterator : iterator } }
-        }
-    }
-
-
-    continueAtomCalculation (sourceAtom : ChronoAtomI, continuation : ChronoContinuation, maybeDirtyAtoms : Set<ChronoAtomI>) : ChronoIterationResult {
-        const me            = this,
-              iterator      = continuation.iterator
-
-        let incomingAtom    = continuation.atom
-
-        do {
-            let iteratorValue : IteratorResult<Effect | ChronoAtom | ChronoValue>
-
-            if (incomingAtom) {
-                sourceAtom.observedDuringCalculation.push(incomingAtom)
-
-                // Cycle condition
-                // ideally should be removed (same as while condition)
-                if (maybeDirtyAtoms.has(incomingAtom) && !this.isAtomStable(incomingAtom)) {
-                    let cycle : Node[]
-
-                    me.walkDepth(WalkForwardContext.new({
-                        forEachNext             : function (atom : ChronoAtom, func) {
-                            if (atom === <any> me) {
-                                me.needRecalculationAtoms.forEach(func)
-                            }
-                            else {
-                                atom.observedDuringCalculation.forEach(func)
-                            }
-                        },
-
-                        onCycle                 : (node : Node, stack : WalkStep[]) => {
-                            // NOTE: After onCycle call walkDepth instantly returns
-                            cycle = cycleInfo(stack) as Node[]
-
-                            return OnCycleAction.Cancel
-                        }
-                    }))
-
-                    iteratorValue = { value: GraphCycleDetectedEffect.new({ cycle }), done : true }
-                }
-                else {
-                    iteratorValue   = iterator.next(
-                        incomingAtom.hasNextStableValue() ? incomingAtom.getNextStableValue() : incomingAtom.getConsistentValue()
-                    )
-                }
-
-            } else {
-                iteratorValue   = iterator.next()
-            }
-
-            const value         = iteratorValue.value
-
-            if (value instanceof Effect) {
-                return { effect : value, continuation : { iterator : iterator } }
-            }
-
-            if (iteratorValue.done) {
-                return { value }
-            }
-
-            // TODO should ignore non-final non-atom values
-            incomingAtom    = value
-
-        } while (!maybeDirtyAtoms.has(incomingAtom) || this.isAtomStable(incomingAtom))
-
-        return { continuation : { iterator, atom : incomingAtom } }
-    }
+    // startAtomCalculation (sourceAtom : ChronoAtomI) : ChronoIterationResult {
+    //     const iterator : ChronoIterator<ChronoValue> = sourceAtom.calculate(sourceAtom.proposedValue)
+    //
+    //     let iteratorValue   = iterator.next()
+    //
+    //     const value         = iteratorValue.value
+    //
+    //     if (value instanceof Effect) {
+    //         return { effect : value, continuation : { iterator : iterator } }
+    //     }
+    //     else if (iteratorValue.done) {
+    //         return { value }
+    //     }
+    //     else {
+    //         return { continuation : { atom : value, iterator : iterator } }
+    //     }
+    // }
+    //
+    //
+    // continueAtomCalculation (sourceAtom : ChronoAtomI, continuation : ChronoContinuation, maybeDirtyAtoms : Set<ChronoAtomI>) : ChronoIterationResult {
+    //     const me            = this,
+    //           iterator      = continuation.iterator
+    //
+    //     let incomingAtom    = continuation.atom
+    //
+    //     do {
+    //         let iteratorValue : IteratorResult<Effect | ChronoAtom | ChronoValue>
+    //
+    //         if (incomingAtom) {
+    //             sourceAtom.observedDuringCalculation.push(incomingAtom)
+    //
+    //             // Cycle condition
+    //             // ideally should be removed (same as while condition)
+    //             if (maybeDirtyAtoms.has(incomingAtom) && !this.isAtomStable(incomingAtom)) {
+    //                 let cycle : Node[]
+    //
+    //                 me.walkDepth(WalkForwardContext.new({
+    //                     forEachNext             : function (atom : ChronoAtom, func) {
+    //                         if (atom === <any> me) {
+    //                             me.needRecalculationAtoms.forEach(func)
+    //                         }
+    //                         else {
+    //                             atom.observedDuringCalculation.forEach(func)
+    //                         }
+    //                     },
+    //
+    //                     onCycle                 : (node : Node, stack : WalkStep[]) => {
+    //                         // NOTE: After onCycle call walkDepth instantly returns
+    //                         cycle = cycleInfo(stack) as Node[]
+    //
+    //                         return OnCycleAction.Cancel
+    //                     }
+    //                 }))
+    //
+    //                 iteratorValue = { value: GraphCycleDetectedEffect.new({ cycle }), done : true }
+    //             }
+    //             else {
+    //                 iteratorValue   = iterator.next(
+    //                     incomingAtom.hasNextStableValue() ? incomingAtom.getNextStableValue() : incomingAtom.getConsistentValue()
+    //                 )
+    //             }
+    //
+    //         } else {
+    //             iteratorValue   = iterator.next()
+    //         }
+    //
+    //         const value         = iteratorValue.value
+    //
+    //         if (value instanceof Effect) {
+    //             return { effect : value, continuation : { iterator : iterator } }
+    //         }
+    //
+    //         if (iteratorValue.done) {
+    //             return { value }
+    //         }
+    //
+    //         // TODO should ignore non-final non-atom values
+    //         incomingAtom    = value
+    //
+    //     } while (!maybeDirtyAtoms.has(incomingAtom) || this.isAtomStable(incomingAtom))
+    //
+    //     return { continuation : { iterator, atom : incomingAtom } }
+    // }
 
 
     * propagateSingle () : IterableIterator<Effect | PropagateSingleResult> {
-        const toCalculate       = []
-        const maybeDirty        = new Set<ChronoAtom>()
+        const stack             = []
+        const transitions       = this.transitions = new Map<ChronoAtom, Transition>()
+
         const me                = this
 
         let cycle : Node[]      = null
@@ -255,14 +245,14 @@ class ChronoGraph extends base {
             onTopologicalNode       : (atom : ChronoAtom) => {
                 if (<any> atom === <any> this) return
 
-                maybeDirty.add(atom)
+                transitions.set(atom, { iterator : null, iterationResult : null, edgesFlow : atom.incoming.size })
 
                 // skip lazy atoms from `toCalculate` array, instead nullify there values
                 // lazy atoms may still be calculated as dependencies of other atoms
                 if (atom.lazy) {
                     atom.clear()
                 } else {
-                    toCalculate.push(atom)
+                    stack.push(atom)
                 }
             }
         }))
@@ -271,69 +261,100 @@ class ChronoGraph extends base {
             return GraphCycleDetectedEffect.new({ cycle })
         }
 
+        this.needRecalculationAtoms.forEach(atom => transitions.get(atom).edgesFlow = 1)
+
         let depth
 
-        const conts             = this.touchedAtoms = new Map<ChronoAtom, ChronoContinuation>()
-        const visitedAt         = new Map<ChronoAtom, number>()
-        const changedAtoms      = this.changedAtoms = []
+        while (depth = stack.length) {
+            const sourceAtom : ChronoAtom   = stack[ depth - 1 ]
 
-        while (depth = toCalculate.length) {
-            const sourceAtom : ChronoAtom   = toCalculate[ depth - 1 ]
+            const transition    = transitions.get(sourceAtom)
 
-            if (this.isAtomStable(sourceAtom) || !maybeDirty.has(sourceAtom)) {
-                toCalculate.pop()
+            if (transition.iterationResult && transition.iterationResult.done || transition.edgesFlow < 0) {
+                stack.pop()
                 continue
             }
 
-            const visitedAtDepth    = visitedAt.get(sourceAtom)
+            let iterationResult : IteratorResult<any>
 
-            let calcRes : ChronoIterationResult
-
-            // node has been already visited
-            if (visitedAtDepth != null) {
-                const cont          = conts.get(sourceAtom)
-
-                calcRes             = this.continueAtomCalculation(sourceAtom, cont, maybeDirty)
+            if (transition.iterationResult) {
+                iterationResult     = transition.iterationResult
             } else {
-                visitedAt.set(sourceAtom, depth)
+                if (transition.edgesFlow == 0) {
+                    transition.edgesFlow--
 
-                calcRes             = this.startAtomCalculation(sourceAtom)
-            }
+                    sourceAtom.nextStableValue  = sourceAtom.value
 
-            if (calcRes.effect) {
-                yield calcRes.effect
-            }
+                    sourceAtom.outgoing.forEach((atom : ChronoAtom) => transitions.get(atom).edgesFlow--)
 
-            if (calcRes.continuation) {
-                conts.set(sourceAtom, calcRes.continuation)
+                    stack.pop()
+                    continue
+                } else {
+                    transition.iterator     = sourceAtom.calculate(sourceAtom.proposedValue)
 
-                const atom  = calcRes.continuation.atom
-
-                if (atom) {
-                    // this line is necessary for cycles visualization to work correctly, strictly it is not needed,
-                    // because in non-cycle scenario "observedDuringCalculation" is filled in the `continueAtomCalculation`
-                    sourceAtom.observedDuringCalculation.push(atom)
-
-                    toCalculate.push(atom)
+                    iterationResult         = transition.iterationResult = transition.iterator.next()
                 }
-            } else {
-                // this makes sure that _all_ atoms, for which the calculation has started
-                // are "collected" in the `conts` Map
-                // then, during reject, we'll iterate over this map
-                conts.set(sourceAtom, null)
+            }
 
-                const consistentValue   = calcRes.value
+            do {
+                const value         = iterationResult.value
 
-                if (!sourceAtom.equality(consistentValue, sourceAtom.getConsistentValue())) {
-                    changedAtoms.push(sourceAtom)
+                if (iterationResult.done) {
+                    if (sourceAtom.equality(value, sourceAtom.getConsistentValue())) {
+                        sourceAtom.outgoing.forEach((atom : ChronoAtom) => transitions.get(atom).edgesFlow--)
+                    }
 
-                    sourceAtom.nextStableValue = consistentValue
+                    sourceAtom.nextStableValue = value
+
+                    stack.pop()
+
+                    break
+                }
+                else if (isChronoAtom(value)) {
+                    sourceAtom.observedDuringCalculation.push(value)
+
+                    const requestedTransition   = transitions.get(value)
+
+                    if (!requestedTransition || requestedTransition.edgesFlow <= 0 || requestedTransition.iterationResult && requestedTransition.iterationResult.done) {
+                        iterationResult = transition.iterationResult = transition.iterator.next(value.get())
+                    }
+                    else if (!requestedTransition.iterationResult) {
+                        stack.push(value)
+
+                        break
+                    }
+                    else {
+                        // cycle - the requested quark has started calculation (means it was encountered in this loop before)
+                        // but the calculation did not complete yet (even that requested quark is calculated before the current)
+                        let cycle : Node[]
+
+                        me.walkDepth(WalkForwardContext.new({
+                            forEachNext             : function (atom : ChronoAtom, func) {
+                                if (atom === <any> me) {
+                                    me.needRecalculationAtoms.forEach(func)
+                                }
+                                else {
+                                    atom.observedDuringCalculation.forEach(func)
+                                }
+                            },
+
+                            onCycle                 : (node : Node, stack : WalkStep[]) => {
+                                // NOTE: After onCycle call walkDepth instantly returns
+                                cycle = cycleInfo(stack) as Node[]
+
+                                return OnCycleAction.Cancel
+                            }
+                        }))
+
+                        yield GraphCycleDetectedEffect.new({ cycle })
+                    }
+                }
+                else {
+                    // bypass the unrecognized effect to the outer context
+                    iterationResult = transition.iterationResult = transition.iterator.next(yield value)
                 }
 
-                this.markStable(sourceAtom)
-
-                toCalculate.pop()
-            }
+            } while (true)
         }
 
         return { success : true }
@@ -695,7 +716,7 @@ class ChronoGraph extends base {
                             value = `Array(${value.length})`
                         }
 
-                        let color = (!this.isAtomNeedRecalculation(atom) || this.isAtomStable(atom)) ? 'darkgreen' : 'red'
+                        let color = (!this.isAtomNeedRecalculation(atom) /*|| this.isAtomStable(atom)*/) ? 'darkgreen' : 'red'
 
                         dot.push(`"${atom.id}" [label="${name}=${value}\", fontcolor="${color}"]`)
 
@@ -745,7 +766,7 @@ class ChronoGraph extends base {
                         //let edgeLabel = this.getEdgeLabel(fromId, atom.id)
                         const edgeLabel = ''
 
-                        let color = (!this.isAtomNeedRecalculation(fromAtom) || this.isAtomStable(fromAtom)) ? 'darkgreen' : 'red'
+                        let color = (!this.isAtomNeedRecalculation(fromAtom) /*|| this.isAtomStable(fromAtom)*/) ? 'darkgreen' : 'red'
                         let penwidth = (cycle[fromId] == toAtom.id) ? 5 : 1
 
                         dot.push(`"${fromId}" -> "${toAtom.id}" [label="${edgeLabel}", color="${color}", penwidth=${penwidth}]`)
