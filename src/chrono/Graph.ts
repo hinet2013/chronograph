@@ -80,7 +80,7 @@ class ChronoGraph extends base {
         this.needRecalculationAtoms.clear()
 
         this.transitions.forEach((transition, atom) => {
-            if (transition.edgesFlow > 0 && transition.iterationResult) {
+            if (transition.iterationResult) {
                 atom.commitValue()
                 atom.commitEdges()
             }
