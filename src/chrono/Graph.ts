@@ -79,12 +79,12 @@ class ChronoGraph extends base {
         this.needRecalculationAtoms.forEach(atom => atom.clearUserInput())
         this.needRecalculationAtoms.clear()
 
-        this.transitions.forEach((transition, atom) => {
+        for (const [ atom, transition ] of this.transitions) {
             if (transition.iterationResult) {
                 atom.commitValue()
                 atom.commitEdges()
             }
-        })
+        }
     }
 
 
