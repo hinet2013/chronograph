@@ -86,7 +86,7 @@ export class CycleDispatcher<Variable = object> extends Base {
         const needFixedVars = this.variables.size - this.numberOfEquations
 
         //------------------
-        // if we are given enough fixed vars to solve the equations system - set the remaining to Pure
+        // if we are given enough fixed vars to solve the equations system - set the remaining to Pure and exit
         if (fixedVars === needFixedVars) {
             this.markRemainingAsPure(result)
 
@@ -95,6 +95,8 @@ export class CycleDispatcher<Variable = object> extends Base {
         else if (fixedVars > needFixedVars) {
             throw new Error('Too many fixed variables (user input), need to perform intermediate propagate')
         }
+
+        if (window.DEBUG) debugger
 
         //------------------
         // still not enough fixed variables at this point - starting to use `keepIfPossible` flags
@@ -113,16 +115,25 @@ export class CycleDispatcher<Variable = object> extends Base {
             }
         }
 
+        //------------------
+        // still not enough fixed variables at this point
         const remainingFreeVariablesWithPreviousValue   = Array.from(this.variables).filter(variable => {
             return result.get(variable) !== CalculationMode.CalculateProposed && this.hasPreviousValue.has(variable)
         })
 
+        // we still need `needFixedVars - fixedVars` extra fixed vars, if thats how much we have variables with previous value -
+        // then we use all them
         if (remainingFreeVariablesWithPreviousValue.length === needFixedVars - fixedVars) {
             // promoting remaining all remaining vars
             remainingFreeVariablesWithPreviousValue.forEach(variable => result.set(variable, CalculationMode.CalculateProposed))
-        } else
+        }
+        else if (this.satisfiesDefaultResolution(result)) {
+            return this.defaultResolution
+        }
+        else {
             // need to pick some of remaining vars, asking user
             this.promoteSomeVariablesWithPreviousValueToFixed(result, new Set(remainingFreeVariablesWithPreviousValue), needFixedVars - fixedVars)
+        }
 
         const fixedVars2      = Array.from(result.values()).filter(mode => mode === CalculationMode.CalculateProposed).length
 
@@ -140,6 +151,15 @@ export class CycleDispatcher<Variable = object> extends Base {
         }
 
         return result
+    }
+
+
+    satisfiesDefaultResolution (result : CycleResolution<Variable>) : boolean {
+        for (const [ variable, mode ] of result) {
+            if (this.defaultResolution.get(variable) !== mode) return false
+        }
+
+        return true
     }
 
 
