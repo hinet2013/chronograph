@@ -96,7 +96,7 @@ export class CycleDispatcher<Variable = object> extends Base {
             throw new Error('Too many fixed variables (user input), need to perform intermediate propagate')
         }
 
-        if (window.DEBUG) debugger
+        // if (window.DEBUG) debugger
 
         //------------------
         // still not enough fixed variables at this point - starting to use `keepIfPossible` flags
