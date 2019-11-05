@@ -4,6 +4,9 @@
 //        "importHelpers"             : true,
         "experimentalDecorators"    : true,
 
+//        "declaration"               : true,
+//        "emitDeclarationOnly"       : true,
+
         "target"                : "ES2017",
 
         "sourceMap"             : false,
