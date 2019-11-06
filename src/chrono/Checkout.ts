@@ -4,7 +4,7 @@ import { CalculationContext, CalculationFunction, Context } from "../primitives/
 import { clearLazyProperty, copySetInto, lazyProperty } from "../util/Helpers.js"
 import { ProgressNotificationEffect } from "./Effect.js"
 import { CalculatedValueGen, Identifier, Variable } from "./Identifier.js"
-import { Quark } from "./Quark.js"
+import { Quark, QuarkI } from "./Quark.js"
 import { MinimalRevision, Revision } from "./Revision.js"
 import { MinimalTransaction, Transaction, TransactionPropagateResult, YieldableValue } from "./Transaction.js"
 
@@ -342,7 +342,7 @@ class Checkout extends base {
     }
 
 
-    touch (identifier : Identifier) : Quark {
+    touch (identifier : Identifier) : QuarkI {
         return this.activeTransaction.touch(identifier)
     }
 
@@ -462,6 +462,6 @@ class Checkout extends base {
 
 export type Checkout = Mixin<typeof Checkout>
 
-export interface CheckoutI extends Checkout {}
+export interface CheckoutI extends Mixin<typeof Checkout> {}
 
 export type CheckoutConstructor = MixinConstructor<typeof Checkout>

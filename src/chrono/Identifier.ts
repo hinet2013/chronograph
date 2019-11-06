@@ -14,7 +14,7 @@ import { prototypeValue } from "../util/Helpers.js"
 import { CheckoutI } from "./Checkout.js"
 import { ProposedOrCurrent } from "./Effect.js"
 import { Quark, QuarkConstructor } from "./Quark.js"
-import { Transaction, YieldableValue } from "./Transaction.js"
+import { Transaction, TransactionI, YieldableValue } from "./Transaction.js"
 
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -51,7 +51,7 @@ export class Identifier<ContextT extends Context = Context, ValueT = any> extend
     }
 
 
-    write (me : this, transaction : Transaction, proposedValue : ValueT, ...args : this[ 'ArgsT' ]) {
+    write (me : this, transaction : TransactionI, proposedValue : ValueT, ...args : this[ 'ArgsT' ]) {
         const quark                 = transaction.acquireQuark(me)
 
         quark.proposedValue         = proposedValue

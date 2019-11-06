@@ -6,6 +6,9 @@
 
         "target"                : "ES2017",
 
+//        "declaration"               : true,
+//        "emitDeclarationOnly"       : true,
+
         "sourceMap"             : false,
         "lib"                   : [
             "esnext"

@@ -3,7 +3,7 @@ import { NOT_VISITED } from "../graph/WalkDepth.js"
 import { CalculationContext, Context, GenericCalculation } from "../primitives/Calculation.js"
 import { MAX_SMI } from "../util/Helpers.js"
 import { Identifier } from "./Identifier.js"
-import { YieldableValue } from "./Transaction.js"
+import { TransactionI, YieldableValue } from "./Transaction.js"
 
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -139,7 +139,7 @@ class Quark extends base {
     // }
 
 
-    getProposedValue (transaction /*: TransactionI*/) : any {
+    getProposedValue (transaction : TransactionI) : any {
         if (this.needToBuildProposedValue) {
             this.needToBuildProposedValue   = false
 
@@ -154,7 +154,7 @@ export type Quark = Mixin<typeof Quark>
 
 export type QuarkConstructor = MixinConstructor<typeof Quark>
 
-export interface QuarkI extends Quark {}
+export interface QuarkI extends Mixin<typeof Quark> {}
 
 //---------------------------------------------------------------------------------------------------------------------
 export const TombStone = Symbol('Tombstone')

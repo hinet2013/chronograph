@@ -29,8 +29,8 @@ import {
     WriteSymbol
 } from "./Effect.js"
 import { Identifier, throwUnknownIdentifier } from "./Identifier.js"
-import { EdgeType, Quark, TombStone } from "./Quark.js"
-import { MinimalRevision, Revision, Scope } from "./Revision.js"
+import { EdgeType, Quark, QuarkI, TombStone } from "./Quark.js"
+import { MinimalRevision, Revision, RevisionI, Scope } from "./Revision.js"
 
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -173,9 +173,9 @@ export type TransactionPropagateResult = { revision : Revision, entries : Scope 
 export const Transaction = <T extends AnyConstructor<Base>>(base : T) =>
 
 class Transaction extends base {
-    baseRevision            : Revision              = undefined
+    baseRevision            : RevisionI             = undefined
 
-    candidate               : Revision              = undefined
+    candidate               : RevisionI             = undefined
 
     graph                   : CheckoutI             = undefined
 
@@ -184,11 +184,11 @@ class Transaction extends base {
     walkContext             : WalkForwardOverwriteContext   = undefined
 
     // we use 2 different stacks, because they support various effects
-    stackSync               : LeveledStack<Quark>  = new LeveledStack()
+    stackSync               : LeveledStack<QuarkI>  = new LeveledStack()
     // the `stackGen` supports async effects notably
-    stackGen                : LeveledStack<Quark>  = new LeveledStack()
+    stackGen                : LeveledStack<QuarkI>  = new LeveledStack()
 
-    activeStack             : Quark[]
+    activeStack             : QuarkI[]
 
     onEffectSync            : SyncEffectHandler     = undefined
     onEffectAsync           : AsyncEffectHandler    = undefined
@@ -233,7 +233,7 @@ class Transaction extends base {
     }
 
 
-    get entries () : Map<Identifier, Quark> {
+    get entries () : Map<Identifier, QuarkI> {
         return this.walkContext.visited
     }
 
@@ -243,7 +243,7 @@ class Transaction extends base {
     }
 
 
-    getActiveEntry () : Quark {
+    getActiveEntry () : QuarkI {
         return this.activeStack[ this.activeStack.length - 1 ]
 
         // // `stackSync` is always empty, except when the synchronous "batch" is being processed
@@ -338,7 +338,7 @@ class Transaction extends base {
     }
 
 
-    touch (identifier : Identifier) : Quark {
+    touch (identifier : Identifier) : QuarkI {
         this.walkContext.continueFrom([ identifier ])
 
         const entry                 = this.entries.get(identifier)
@@ -360,7 +360,7 @@ class Transaction extends base {
     }
 
 
-    populateCandidateScopeFromTransitions (candidate : Revision, entries : Map<Identifier, Quark>) {
+    populateCandidateScopeFromTransitions (candidate : RevisionI, entries : Map<Identifier, QuarkI>) {
         if (candidate.scope.size === 0) {
             // in this branch we can overwrite the whole map
             candidate.scope     = entries
@@ -406,7 +406,7 @@ class Transaction extends base {
     }
 
 
-    prePropagate (args? : PropagateArguments) : LeveledStack<Quark> {
+    prePropagate (args? : PropagateArguments) : LeveledStack<QuarkI> {
         if (this.isClosed) throw new Error('Can not propagate closed revision')
 
         this.isClosed               = true
@@ -505,7 +505,7 @@ class Transaction extends base {
     }
 
 
-    [ProposedOrCurrentSymbol] (effect : Effect, activeEntry : Quark) : any {
+    [ProposedOrCurrentSymbol] (effect : Effect, activeEntry : QuarkI) : any {
         const quark             = activeEntry.acquireQuark()
 
         quark.usedProposedOrCurrent      = true
@@ -526,22 +526,22 @@ class Transaction extends base {
     }
 
 
-    [TransactionSymbol] (effect : Effect, activeEntry : Quark) : any {
+    [TransactionSymbol] (effect : Effect, activeEntry : QuarkI) : any {
         return this
     }
 
 
-    [OwnQuarkSymbol] (effect : Effect, activeEntry : Quark) : any {
+    [OwnQuarkSymbol] (effect : Effect, activeEntry : QuarkI) : any {
         return activeEntry
     }
 
 
-    [OwnIdentifierSymbol] (effect : Effect, activeEntry : Quark) : any {
+    [OwnIdentifierSymbol] (effect : Effect, activeEntry : QuarkI) : any {
         return activeEntry.identifier
     }
 
 
-    [WriteSymbol] (effect : WriteEffect, activeEntry : Quark) : any {
+    [WriteSymbol] (effect : WriteEffect, activeEntry : QuarkI) : any {
         if (activeEntry.identifier.lazy) throw new Error('Lazy identifiers can not use `Write` effect')
 
         this.walkContext.currentEpoch++
@@ -552,7 +552,7 @@ class Transaction extends base {
     }
 
 
-    [WriteSeveralSymbol] (effect : WriteSeveralEffect, activeEntry : Quark) : any {
+    [WriteSeveralSymbol] (effect : WriteSeveralEffect, activeEntry : QuarkI) : any {
         if (activeEntry.identifier.lazy) throw new Error('Lazy identifiers can not use `Write` effect')
 
         this.walkContext.currentEpoch++
@@ -565,7 +565,7 @@ class Transaction extends base {
     }
 
 
-    [PreviousValueOfSymbol] (effect : PreviousValueOfEffect, activeEntry : Quark) : any {
+    [PreviousValueOfSymbol] (effect : PreviousValueOfEffect, activeEntry : QuarkI) : any {
         const source    = effect.identifier
 
         this.addEdge(source, activeEntry, EdgeTypePast)
@@ -574,7 +574,7 @@ class Transaction extends base {
     }
 
 
-    [ProposedValueOfSymbol] (effect : ProposedValueOfEffect, activeEntry : Quark) : any {
+    [ProposedValueOfSymbol] (effect : ProposedValueOfEffect, activeEntry : QuarkI) : any {
         const source    = effect.identifier
 
         this.addEdge(source, activeEntry, EdgeTypePast)
@@ -587,7 +587,7 @@ class Transaction extends base {
     }
 
 
-    [HasProposedValueSymbol] (effect : ProposedValueOfEffect, activeEntry : Quark) : any {
+    [HasProposedValueSymbol] (effect : ProposedValueOfEffect, activeEntry : QuarkI) : any {
         const source    = effect.identifier
 
         this.addEdge(source, activeEntry, EdgeTypePast)
@@ -598,7 +598,7 @@ class Transaction extends base {
     }
 
 
-    [ProposedOrPreviousValueOfSymbol] (effect : ProposedValueOfEffect, activeEntry : Quark) : any {
+    [ProposedOrPreviousValueOfSymbol] (effect : ProposedValueOfEffect, activeEntry : QuarkI) : any {
         const source    = effect.identifier
 
         this.addEdge(source, activeEntry, EdgeTypePast)
@@ -607,12 +607,12 @@ class Transaction extends base {
     }
 
 
-    [UnsafeProposedOrPreviousValueOfSymbol] (effect : ProposedValueOfEffect, activeEntry : Quark) : any {
+    [UnsafeProposedOrPreviousValueOfSymbol] (effect : ProposedValueOfEffect, activeEntry : QuarkI) : any {
         return this.readDirty(effect.identifier)
     }
 
 
-    [ProposedArgumentsOfSymbol] (effect : ProposedValueOfEffect, activeEntry : Quark) : any {
+    [ProposedArgumentsOfSymbol] (effect : ProposedValueOfEffect, activeEntry : QuarkI) : any {
         const source    = effect.identifier
 
         this.addEdge(source, activeEntry, EdgeTypePast)
@@ -624,7 +624,7 @@ class Transaction extends base {
 
 
     // this method is intentionally not used, but instead "manually" inlined - this improves benchmarks noticeably
-    addEdge (identifierRead : Identifier, activeEntry : Quark, type : EdgeType) : Quark {
+    addEdge (identifierRead : Identifier, activeEntry : QuarkI, type : EdgeType) : QuarkI {
         const identifier    = activeEntry.identifier
 
         if (identifier.level < identifierRead.level) throw new Error('Identifier can not read from higher level identifier')
@@ -652,7 +652,7 @@ class Transaction extends base {
 
     // this method is not decomposed into smaller ones intentionally, as that makes benchmarks worse
     // it seems that overhead of calling few more functions in such tight loop as this outweighs the optimization
-    * calculateTransitionsStackGen (context : CalculationContext<any>, queue : LeveledStack<Quark>) : Generator<any, void, unknown> {
+    * calculateTransitionsStackGen (context : CalculationContext<any>, queue : LeveledStack<QuarkI>) : Generator<any, void, unknown> {
         const entries                       = this.entries
         const propagationStartDate          = this.propagationStartDate
 
@@ -883,7 +883,7 @@ class Transaction extends base {
 
 
     // // THIS METHOD HAS TO BE KEPT SYNCED WITH THE `calculateTransitionsStackGen` !!!
-    calculateTransitionsStackSync (context : CalculationContext<any>, queue : LeveledStack<Quark>) {
+    calculateTransitionsStackSync (context : CalculationContext<any>, queue : LeveledStack<QuarkI>) {
         const entries                       = this.entries
         const prevActiveStack               = this.activeStack
 
@@ -1088,6 +1088,6 @@ class Transaction extends base {
 
 export type Transaction = Mixin<typeof Transaction>
 
-export interface TransactionI extends Transaction {}
+export interface TransactionI extends Mixin<typeof Transaction> {}
 
 export class MinimalTransaction extends Transaction(Base) {}
