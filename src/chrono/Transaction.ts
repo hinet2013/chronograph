@@ -936,7 +936,7 @@ export class Transaction extends Base {
                 entry.setOrigin(entry.previous.origin)
 
                 // if there's no outgoing edges we remove the quark
-                if (entry.size === 0) {
+                if (!entry.hasOutgoingEdges()) {
                     entries.delete(identifier)
                 }
 
@@ -1052,7 +1052,7 @@ export class Transaction extends Base {
                 entry.setOrigin(entry.previous.origin)
 
                 // if there's no outgoing edges we remove the quark
-                if (entry.size === 0) {
+                if (!entry.hasOutgoingEdges()) {
                     entries.delete(identifier)
                 }
 

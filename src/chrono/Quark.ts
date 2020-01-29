@@ -21,8 +21,8 @@ let ORIGIN_ID : OriginId    = 0
 
 //---------------------------------------------------------------------------------------------------------------------
 export class Quark extends MixinAny(
-    [ Map ],
-    (base : AnyConstructor<Map<any, any> & GenericCalculation<Context, any, any, [ CalculationContext<YieldableValue>, ...any[] ]>>) =>
+    [],
+    (base : AnyConstructor<GenericCalculation<Context, any, any, [ CalculationContext<YieldableValue>, ...any[] ]>>) =>
 
 class Quark extends base {
 
@@ -161,7 +161,7 @@ class Quark extends base {
 
         // some help for garbage collector
         origin.clearProperties()
-        origin.clear()
+        origin.clearOutgoing()
     }
 
 
@@ -169,7 +169,7 @@ class Quark extends base {
         const origin                = this.origin
 
         if (origin === this.previous) {
-            this.mergePreviousOrigin(this)
+            this.mergePreviousOrigin(this.getOutgoing())
         } else {
 
         }
@@ -217,8 +217,12 @@ class Quark extends base {
     }
 
 
+    $outgoing           : Map<Identifier, Quark>        = undefined
+
     getOutgoing () : Map<Identifier, Quark> {
-        return this as Map<Identifier, Quark>
+        if (this.$outgoing !== undefined) return this.$outgoing
+
+        return this.$outgoing = new Map()
     }
 
 
@@ -231,16 +235,23 @@ class Quark extends base {
     }
 
 
+    hasOutgoingEdges () : boolean {
+        if (this.$outgoing && this.$outgoing.size > 0) return true
+        if (this.$outgoingPast && this.$outgoingPast.size > 0) return true
+
+        return false
+    }
+
+
     addOutgoingTo (toQuark : Quark, type : EdgeType) {
-        const outgoing      = type === EdgeType.Normal ? this as Map<Identifier, Quark> : this.getOutgoingPast()
+        const outgoing      = type === EdgeType.Normal ? this.getOutgoing() : this.getOutgoingPast()
 
         outgoing.set(toQuark.identifier, toQuark)
     }
 
 
     clearOutgoing () {
-        this.clear()
-
+        if (this.$outgoing !== undefined) this.$outgoing.clear()
         if (this.$outgoingPast !== undefined) this.$outgoingPast.clear()
     }
 
