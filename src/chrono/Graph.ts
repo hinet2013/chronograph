@@ -32,6 +32,11 @@ import { TombStone } from "./Quark.js"
 import { Revision } from "./Revision.js"
 import { EdgeTypePast, Transaction, TransactionCommitResult, YieldableValue } from "./Transaction.js"
 
+const EMPTY_ARRAY = []
+
+type CallsQueueItem = [ Function, Object, any[] ]
+
+type CallsQueue = CallsQueueItem[]
 
 //---------------------------------------------------------------------------------------------------------------------
 /**
@@ -144,11 +149,13 @@ export class ChronoGraph extends Base {
 
     autoCommitHandler       : AnyFunction       = null
 
-    onWriteDuringCommit     : 'throw' | 'warn' | 'ignore' = 'throw'
+    onWriteDuringCommit     : 'throw' | 'warn' | 'queue' | 'ignore' = 'queue'
 
     onComputationCycle      : 'throw' | 'warn' | 'reject' = 'throw'
 
     transactionClass        : typeof Transaction    = Transaction
+
+    callsQueue              : CallsQueue            = []
 
 
     initialize (...args) {
@@ -425,7 +432,18 @@ export class ChronoGraph extends Base {
     async commitAsync (args? : CommitArguments) : Promise<CommitResult> {
         this.unScheduleAutoCommit()
 
-        if (this.isCommitting) return this.ongoing
+        if (this.isCommitting) {
+            if (this.onWriteDuringCommit !== 'queue' || this.callsQueue.length) {
+                return this.ongoing
+            } else {
+                const args = arguments
+
+                return new Promise((resolve, reject) => {
+                    this.queueCall((...args) => this.commitAsync(...args).then(resolve).catch(reject), this, [ ...args ])
+                    // this.callsQueue.push([ (...args) => this.commitAsync(...args).then(resolve).catch(reject), this, [ ...args ] ])
+                })
+            }
+        }
 
         this.isCommitting       = true
 
@@ -447,6 +465,8 @@ export class ChronoGraph extends Base {
             if (!activeTransaction.rejectedWith) this.markAndSweep()
 
             this.isCommitting           = false
+
+            this.processCallsQueue()
         })
 
         //
@@ -526,7 +546,7 @@ export class ChronoGraph extends Base {
      *
      * @param value The initial value. The `undefined` value will be converted to `null`
      */
-    variable<T> (value : T) : Variable<T> {
+    variable<T> (value : T) : Promise<Variable<T>> {
         const variable      = VariableC<T>()
 
         // always initialize variables with `null`
@@ -540,7 +560,7 @@ export class ChronoGraph extends Base {
      * @param name The [[Variable.name]] property of the newly created variable
      * @param value The initial value. The `undefined` value will be converted to `null`
      */
-    variableNamed<T> (name : any, value : T) : Variable<T> {
+    variableNamed<T> (name : any, value : T) : Promise<Variable<T>> {
         const variable      = VariableC<T>({ name })
 
         // always initialize variables with `null`
@@ -556,7 +576,7 @@ export class ChronoGraph extends Base {
      * @param calculation The calculation function of the identifier.
      * @param context The [[Identifier.context|context]] property of the newly created identifier
      */
-    identifier<ContextT extends Context, ValueT> (calculation : CalculationFunction<ContextT, ValueT, any, [ CalculationContext<any>, ...any[] ]>, context? : any) : Identifier<ValueT, ContextT> {
+    identifier<ContextT extends Context, ValueT> (calculation : CalculationFunction<ContextT, ValueT, any, [ CalculationContext<any>, ...any[] ]>, context? : any) : Promise<Identifier<ValueT, ContextT>> {
         const identifier : Identifier<ValueT, ContextT>  = calculation.constructor.name === 'GeneratorFunction' ?
             CalculatedValueGenC<ValueT>({ calculation, context }) as Identifier<ValueT, ContextT>
             :
@@ -576,7 +596,7 @@ export class ChronoGraph extends Base {
      * @param calculation The calculation function of the identifier.
      * @param context The [[Identifier.context]] property of the newly created identifier
      */
-    identifierNamed<ContextT extends Context, ValueT> (name : any, calculation : CalculationFunction<ContextT, ValueT, any, [ CalculationContext<any>, ...any[] ]>, context? : any) : Identifier<ValueT, ContextT> {
+    identifierNamed<ContextT extends Context, ValueT> (name : any, calculation : CalculationFunction<ContextT, ValueT, any, [ CalculationContext<any>, ...any[] ]>, context? : any) : Promise<Identifier<ValueT, ContextT>> {
         const identifier : Identifier<ValueT, ContextT>  = calculation.constructor.name === 'GeneratorFunction' ?
             CalculatedValueGenC<ValueT>({ name, calculation, context }) as Identifier<ValueT, ContextT>
             :
@@ -593,12 +613,19 @@ export class ChronoGraph extends Base {
      * @param proposedValue
      * @param args
      */
-    addIdentifier<T extends Identifier> (identifier : T, proposedValue? : any, ...args : any[]) : T {
+    async addIdentifier<T extends Identifier> (identifier : T, proposedValue? : any, ...args : any[]) : Promise<T> {
         if (this.isCommitting) {
-            if (this.onWriteDuringCommit === 'throw')
-                throw new Error('Adding identifier during commit')
-            else if (this.onWriteDuringCommit === 'warn')
-                warn(new Error('Adding identifier during commit'))
+            switch (this.onWriteDuringCommit) {
+                case 'throw' :
+                    throw new Error('Adding identifier during commit')
+
+                case 'warn' :
+                    warn(new Error('Adding identifier during commit'))
+                    break
+
+                case 'queue' :
+                    await this.callsQueueIsProcessed()
+            }
         }
 
         this.activeTransaction.addIdentifier(identifier, proposedValue, ...args)
@@ -609,17 +636,45 @@ export class ChronoGraph extends Base {
     }
 
 
+    processCallsQueue() {
+        let call : CallsQueueItem
+
+        while ((call = this.callsQueue.shift()) && !this.isCommitting) {
+            call[0].call(call[1], ...call[2])
+        }
+
+        return !this.callsQueue.length
+    }
+
+
+    callsQueueIsProcessed() {
+        return new Promise((resolve, reject) => this.queueCall(() => resolve()))
+    }
+
+
+    queueCall(fn : Function, thisObj : Object = this, args : any[] = EMPTY_ARRAY) {
+        this.callsQueue.push([ fn, thisObj, args ])
+    }
+
+
     /**
      * Removes an identifier from this graph.
      *
      * @param identifier
      */
-    removeIdentifier (identifier : Identifier) {
+    async removeIdentifier (identifier : Identifier) {
         if (this.isCommitting) {
-            if (this.onWriteDuringCommit === 'throw')
-                throw new Error('Removing identifier during commit')
-            else if (this.onWriteDuringCommit === 'warn')
-                warn(new Error('Removing identifier during commit'))
+            switch (this.onWriteDuringCommit) {
+                case 'throw' :
+                    throw new Error('Removing identifier during commit')
+
+                case 'warn' :
+                    warn(new Error('Removing identifier during commit'))
+                    break
+
+                case 'queue' :
+                    await this.callsQueueIsProcessed()
+            }
         }
 
         this.activeTransaction.removeIdentifier(identifier)
@@ -647,12 +702,19 @@ export class ChronoGraph extends Base {
      * @param proposedValue
      * @param args
      */
-    write<T> (identifier : Identifier<T>, proposedValue : T, ...args : any[]) {
+    async write<T> (identifier : Identifier<T>, proposedValue : T, ...args : any[]) {
         if (this.isCommitting) {
-            if (this.onWriteDuringCommit === 'throw')
-                throw new Error('Write during commit')
-            else if (this.onWriteDuringCommit === 'warn')
-                warn(new Error('Write during commit'))
+            switch (this.onWriteDuringCommit) {
+                case 'throw' :
+                    throw new Error('Write during commit')
+
+                case 'warn' :
+                    warn(new Error('Write during commit'))
+                    break
+
+                case 'queue' :
+                    await this.callsQueueIsProcessed()
+            }
         }
 
         this.activeTransaction.write(identifier, proposedValue, ...args)
@@ -728,11 +790,11 @@ export class ChronoGraph extends Base {
     // }
 
 
-    observe
+    async observe
         <ContextT extends Context, Result, Yield extends YieldableValue, ArgsT extends [ CalculationContext<Yield>, ...any[] ]>
         (observerFunc : CalculationFunction<ContextT, Result, Yield, ArgsT>, onUpdated : (value : Result) => any)
     {
-        const identifier    = this.addIdentifier(CalculatedValueGen.new({
+        const identifier    = await this.addIdentifier(CalculatedValueGen.new({
             // observers are explicitly eager
             lazy            : false,
 
@@ -748,11 +810,11 @@ export class ChronoGraph extends Base {
     }
 
 
-    observeContext
+    async observeContext
         <ContextT extends Context, Result, Yield extends YieldableValue, ArgsT extends [ CalculationContext<Yield>, ...any[] ]>
-        (observerFunc : CalculationFunction<ContextT, Result, Yield, ArgsT>, context : object, onUpdated : (value : Result) => any) : Identifier
+        (observerFunc : CalculationFunction<ContextT, Result, Yield, ArgsT>, context : object, onUpdated : (value : Result) => any) : Promise<Identifier>
     {
-        const identifier    = this.addIdentifier(CalculatedValueGen.new({
+        const identifier    = await this.addIdentifier(CalculatedValueGen.new({
             // observers are explicitly eager
             lazy            : false,
 
