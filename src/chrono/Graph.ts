@@ -433,7 +433,7 @@ export class ChronoGraph extends Base {
         this.unScheduleAutoCommit()
 
         if (this.isCommitting) {
-            if (this.onWriteDuringCommit !== 'queue' || this.callsQueue.length) {
+            if (this.onWriteDuringCommit !== 'queue' || !this.callsQueue.length) {
                 return this.ongoing
             } else {
                 const args = arguments
