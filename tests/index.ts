@@ -22,6 +22,18 @@ project.start(
         ]
     },
     {
+        group       : 'Cycle resolver',
+
+        items       : [
+            'cycle_resolver/010_memoizing.t.js',
+            'cycle_resolver/020_sed.t.js',
+            'cycle_resolver/030_sedwu_fixed_duration.t.js',
+            'cycle_resolver/040_sedwu_fixed_duration_effort_driven.t.js',
+            'cycle_resolver/050_sedwu_fixed_effort.t.js',
+            'cycle_resolver/060_sedwu_fixed_units.t.js',
+        ]
+    },
+    {
         group       : 'graph',
 
         items       : [

@@ -24,7 +24,7 @@
     "typedoc": "^0.14.2",
     "@types/node": "^10.12.10",
     "typescript": "~3.4.5",
-    "siesta-lite": "^5.2.2",
+    "siesta-lite": "^5.4.0",
     "tslint": "^5.14.0",
     "regenerator-runtime": "^0.13.1",
     "core-js": "^2.6.5"
