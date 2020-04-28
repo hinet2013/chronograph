@@ -143,6 +143,11 @@ class ChronoAtom extends base {
     }
 
 
+    getProposedOrPreviousValue () : ChronoValue {
+        return this.proposedValue !== undefined ? this.proposedValue : this.value
+    }
+
+
     async set (proposedValue : ChronoValue, ...args) : Promise<PropagationResult> {
         const graph             = this.graph
 

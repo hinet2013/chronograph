@@ -344,14 +344,24 @@ export const generic_field : FieldDecorator<typeof Field> =
 
             if (field.createAccessors) {
 
+                const putterFnName = `put${ uppercaseFirst(propertyKey) }`
+
+                let setter  = putterFnName in target
+                    ?
+                        function (value : any) {
+                            return this[ putterFnName ](value)
+                        }
+                    :
+                        function (value : any) {
+                            return this.$[ propertyKey ].put(value)
+                        }
+
                 Object.defineProperty(target, propertyKey, {
                     get     : function () {
                         return this.$[ propertyKey ].get()
                     },
 
-                    set     : function (value : any) {
-                        return this.$[ propertyKey ].put(value)
-                    }
+                    set     : setter
                 })
 
                 const getterFnName = `get${ uppercaseFirst(propertyKey) }`
