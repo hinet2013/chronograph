@@ -19,6 +19,12 @@ export class Effect extends Base {
 
 
 //---------------------------------------------------------------------------------------------------------------------
+export class PromiseEffect extends Effect {
+    promise     : Promise<any>
+}
+
+
+//---------------------------------------------------------------------------------------------------------------------
 export class CancelPropagationEffect extends Effect {
     description         : string
 }

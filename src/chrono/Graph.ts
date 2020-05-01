@@ -9,7 +9,7 @@ import {
     Effect,
     EffectResolutionResult,
     EffectResolverFunction,
-    GraphCycleDetectedEffect,
+    GraphCycleDetectedEffect, PromiseEffect,
     RestartPropagationEffect
 } from "./Effect.js"
 import { ChronoId } from "./Id.js"
@@ -336,6 +336,11 @@ class ChronoGraph extends base {
 
 
     async onEffect (effect : Effect) : Promise<EffectResolutionResult> {
+        if (effect instanceof PromiseEffect) {
+            await effect.promise
+            return EffectResolutionResult.Resume
+        }
+
         if (effect instanceof CancelPropagationEffect) {
             return EffectResolutionResult.Cancel
         }
