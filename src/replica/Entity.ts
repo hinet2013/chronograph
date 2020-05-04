@@ -251,12 +251,14 @@ export const Entity = <T extends AnyConstructor<object>>(base : T) => {
 
 
         markAsNeedRecalculation (atom : ChronoAtom) {
-            this.getGraph().markAsNeedRecalculation(atom)
+            const graph = this.getGraph()
+            graph && graph.markAsNeedRecalculation(atom)
         }
 
 
         markStable (atom : ChronoAtom) {
-            this.getGraph().markStable(atom)
+            const graph = this.getGraph()
+            graph && graph.markStable(atom)
         }
 
 
