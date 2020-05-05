@@ -316,7 +316,11 @@ export class CycleResolutionInput extends Base {
 
         validateRequiredProperties(this)
 
+        // please the outdated version of TS compiler which we use due
+        // to outdated version of typedoc
+        //@ts-ignore
         this.input = new Map(
+            //@ts-ignore
             CI(this.description.variables).map(variable => [ variable, VariableInputState.NoInput ])
         )
     }
@@ -605,7 +609,11 @@ export class WalkState extends Base {
 
 
     asResolution () : CycleResolutionValue {
+        // please the outdated version of TS compiler which we use due
+        // to outdated version of typedoc
+        //@ts-ignore
         return new Map(
+            //@ts-ignore
             CI(this.description.variables).map(variable => {
                 const formulas   = this.activatedFormulas.formulasByOutput.get(variable)
 
